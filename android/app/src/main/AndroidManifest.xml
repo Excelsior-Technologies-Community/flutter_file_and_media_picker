@@ -44,7 +44,7 @@
         <!-- FileProvider for camera -->
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="com.example.flutter_file_and_media_picker.provider"
+            android:authorities="com.example.flutter_file_and_media_picker.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data

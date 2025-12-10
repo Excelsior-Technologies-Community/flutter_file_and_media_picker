@@ -6,9 +6,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.Settings
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -20,52 +22,95 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class MainActivity: FlutterActivity() {
-    private val CHANNEL = "file_picker_channel"
-    private var pendingResult: MethodChannel.Result? = null
-    private var currentPhotoPath: String = ""
+    private val TAG = "MainActivity"
+    private val CHANNEL = "media_picker_channel"
 
     // Request codes
-    private val PERMISSION_REQUEST_CAMERA = 1001
-    private val PERMISSION_REQUEST_STORAGE = 1002
-    private val REQUEST_PICK_IMAGE = 2001
-    private val REQUEST_PICK_VIDEO = 2002
-    private val REQUEST_PICK_FILE = 2003
-    private val REQUEST_TAKE_PICTURE = 2004
+    private val REQUEST_CAMERA = 1001
+    private val REQUEST_GALLERY = 1002
+    private val REQUEST_FILE = 1003
+
+    // Permission request codes
+    private val PERMISSION_CAMERA = 1004
+    private val PERMISSION_STORAGE = 1005
+
+    // Result callbacks
+    private var cameraResult: MethodChannel.Result? = null
+    private var galleryResult: MethodChannel.Result? = null
+    private var fileResult: MethodChannel.Result? = null
+    private var permissionResult: MethodChannel.Result? = null
+
+    // File for camera photo
+    private var cameraPhotoFile: File? = null
+
+    // Track pending operation
+    private var pendingOperation: String? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        Log.d(TAG, "✅ MainActivity: Configuring Flutter engine")
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
-            pendingResult = result
+            Log.d(TAG, "📞 MethodChannel: ${call.method}")
+
             when (call.method) {
-                "pickImage" -> pickImage()
-                "pickVideo" -> pickVideo()
-                "pickFile" -> pickFile()
-                "takePicture" -> takePicture()
-                "checkPermissions" -> checkAndRequestPermissions()
-                "checkCameraPermission" -> result.success(checkCameraPermission())
-                "checkStoragePermission" -> result.success(checkStoragePermission())
-                "openSettings" -> openAppSettings()
-                else -> result.notImplemented()
+                // Permission checks
+                "checkCameraPermission" -> {
+                    val hasPermission = checkCameraPermission()
+                    Log.d(TAG, "checkCameraPermission: $hasPermission")
+                    result.success(hasPermission)
+                }
+                "checkStoragePermission" -> {
+                    val hasPermission = checkStoragePermission()
+                    Log.d(TAG, "checkStoragePermission: $hasPermission")
+                    result.success(hasPermission)
+                }
+
+                // Permission requests
+                "requestCameraPermission" -> {
+                    permissionResult = result
+                    pendingOperation = "request_camera_permission"
+                    requestCameraPermission()
+                }
+                "requestStoragePermission" -> {
+                    permissionResult = result
+                    pendingOperation = "request_storage_permission"
+                    requestStoragePermission()
+                }
+
+                // Media picker operations
+                "openCamera" -> {
+                    cameraResult = result
+                    pendingOperation = "camera"
+                    openCamera()
+                }
+                "openGallery" -> {
+                    galleryResult = result
+                    pendingOperation = "gallery"
+                    openGallery()
+                }
+                "openSystemFiles" -> {
+                    fileResult = result
+                    pendingOperation = "files"
+                    openSystemFiles()
+                }
+
+                // App settings
+                "openAppSettings" -> {
+                    openAppSettings()
+                    result.success(null)
+                }
+
+                else -> {
+                    Log.w(TAG, "Unknown method: ${call.method}")
+                    result.notImplemented()
+                }
             }
         }
     }
 
-    private fun checkAndRequestPermissions() {
-        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(
-                Manifest.permission.READ_MEDIA_IMAGES,
-                Manifest.permission.READ_MEDIA_VIDEO
-            )
-        } else {
-            arrayOf(
-                Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE
-            )
-        }
-
-        ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQUEST_STORAGE)
-    }
+    // ========== PERMISSION METHODS ==========
 
     private fun checkCameraPermission(): Boolean {
         return ContextCompat.checkSelfPermission(
@@ -76,194 +121,261 @@ class MainActivity: FlutterActivity() {
 
     private fun checkStoragePermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.READ_MEDIA_IMAGES
-            ) == PackageManager.PERMISSION_GRANTED
+            // Android 13+
+            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
         } else {
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            ) == PackageManager.PERMISSION_GRANTED
+            // Android 6-12
+            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
         }
     }
 
     private fun requestCameraPermission() {
+        Log.d(TAG, "Requesting camera permission")
         ActivityCompat.requestPermissions(
             this,
             arrayOf(Manifest.permission.CAMERA),
-            PERMISSION_REQUEST_CAMERA
+            PERMISSION_CAMERA
         )
     }
 
     private fun requestStoragePermission() {
+        Log.d(TAG, "Requesting storage permission")
         val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+
             arrayOf(
-                Manifest.permission.READ_MEDIA_IMAGES,
-                Manifest.permission.READ_MEDIA_VIDEO
+                Manifest.permission.READ_MEDIA_IMAGES
             )
         } else {
+            // Android 6-12
             arrayOf(
                 Manifest.permission.READ_EXTERNAL_STORAGE,
                 Manifest.permission.WRITE_EXTERNAL_STORAGE
             )
         }
 
-        ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQUEST_STORAGE)
+        ActivityCompat.requestPermissions(this, permissions, PERMISSION_STORAGE)
     }
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
-        permissions: Array<String>,
+        permissions: Array<out String>,
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
+        val isGranted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+        Log.d(TAG, "Permission result: requestCode=$requestCode, granted=$isGranted")
+
         when (requestCode) {
-            PERMISSION_REQUEST_CAMERA -> {
-                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    pendingResult?.success(true)
-                    // If takePicture was pending, start it now
-                    takePicture()
-                } else {
-                    pendingResult?.error("PERMISSION_DENIED", "Camera permission denied", null)
+            PERMISSION_CAMERA -> {
+                if (pendingOperation == "request_camera_permission") {
+                    permissionResult?.success(isGranted)
+                    permissionResult = null
+                } else if (pendingOperation == "camera" && isGranted) {
+                    openCamera()
+                } else if (pendingOperation == "camera" && !isGranted) {
+                    cameraResult?.error("PERMISSION_DENIED", "Camera permission denied", null)
+                    cameraResult = null
                 }
             }
-            PERMISSION_REQUEST_STORAGE -> {
-                if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-                    pendingResult?.success(true)
-                } else {
-                    pendingResult?.error("PERMISSION_DENIED", "Storage permission denied", null)
+
+            PERMISSION_STORAGE -> {
+                if (pendingOperation == "request_storage_permission") {
+                    permissionResult?.success(isGranted)
+                    permissionResult = null
+                } else if (pendingOperation == "gallery" && isGranted) {
+                    openGallery()
+                } else if (pendingOperation == "files" && isGranted) {
+                    openSystemFiles()
+                } else if ((pendingOperation == "gallery" || pendingOperation == "files") && !isGranted) {
+                    galleryResult?.error("PERMISSION_DENIED", "Storage permission denied", null)
+                    fileResult?.error("PERMISSION_DENIED", "Storage permission denied", null)
+                    galleryResult = null
+                    fileResult = null
                 }
             }
         }
-        pendingResult = null
+
+        pendingOperation = null
     }
 
-    private fun openAppSettings() {
-        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = Uri.fromParts("package", packageName, null)
-        }
-        startActivity(intent)
-        pendingResult?.success(null)
-        pendingResult = null
-    }
+    // ========== CAMERA ==========
 
-    private fun pickImage() {
-        if (!checkStoragePermission()) {
-            requestStoragePermission()
-            return
-        }
+    private fun openCamera() {
+        Log.d(TAG, "📸 Opening camera")
 
-        val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
-        startActivityForResult(intent, REQUEST_PICK_IMAGE)
-    }
-
-    private fun pickVideo() {
-        if (!checkStoragePermission()) {
-            requestStoragePermission()
-            return
-        }
-
-        val intent = Intent(Intent.ACTION_PICK, MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
-        startActivityForResult(intent, REQUEST_PICK_VIDEO)
-    }
-
-    private fun pickFile() {
-        if (!checkStoragePermission()) {
-            requestStoragePermission()
-            return
-        }
-
-        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-            type = "*/*"
-            addCategory(Intent.CATEGORY_OPENABLE)
-        }
-        startActivityForResult(Intent.createChooser(intent, "Select File"), REQUEST_PICK_FILE)
-    }
-
-    private fun takePicture() {
+        // Check permission
         if (!checkCameraPermission()) {
+            Log.d(TAG, "Camera permission not granted, requesting...")
             requestCameraPermission()
             return
         }
 
         try {
-            val photoFile = createImageFile()
-            val photoURI = FileProvider.getUriForFile(
-                this,
-                "com.example.flutter_file_and_media_picker.fileprovider",
-                photoFile
-            )
+            val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
 
-            val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
-                putExtra(MediaStore.EXTRA_OUTPUT, photoURI)
+            // Create file for the photo
+            cameraPhotoFile = createImageFile()
+            Log.d(TAG, "📁 Camera file created: ${cameraPhotoFile?.absolutePath}")
+
+            if (cameraPhotoFile != null) {
+                // ✅ IMPORTANT: CORRECT AUTHORITY
+                val photoURI = FileProvider.getUriForFile(
+                    this,
+                    "com.example.flutter_file_and_media_picker.fileprovider", // 🔥 આ authority
+                    cameraPhotoFile!!
+                )
+
+                Log.d(TAG, "📎 Photo URI: $photoURI")
+
+                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI)
+                takePictureIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+                startActivityForResult(takePictureIntent, REQUEST_CAMERA)
+            } else {
+                cameraResult?.error("ERROR", "Could not create image file", null)
+                cameraResult = null
+                pendingOperation = null
             }
-            startActivityForResult(intent, REQUEST_TAKE_PICTURE)
         } catch (e: Exception) {
-            pendingResult?.error("FILE_ERROR", "Failed to create image file: ${e.message}", null)
-            pendingResult = null
+            Log.e(TAG, "❌ Camera error: ${e.message}", e)
+            cameraResult?.error("ERROR", e.message, null)
+            cameraResult = null
+            pendingOperation = null
         }
     }
 
-    private fun createImageFile(): File {
-        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
-        return File.createTempFile(
-            "JPEG_${timeStamp}_",
-            ".jpg",
-            storageDir
-        ).apply {
-            currentPhotoPath = absolutePath
-        }
-    }
+    // ========== GALLERY ==========
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
+    private fun openGallery() {
+        Log.d(TAG, "🖼️ Opening gallery")
 
-        if (resultCode != Activity.RESULT_OK) {
-            pendingResult?.error("CANCELLED", "User cancelled the operation", null)
-            pendingResult = null
+        // Check permission
+        if (!checkStoragePermission()) {
+            Log.d(TAG, "Storage permission not granted, requesting...")
+            requestStoragePermission()
             return
         }
 
-        when (requestCode) {
-            REQUEST_PICK_IMAGE, REQUEST_PICK_VIDEO, REQUEST_PICK_FILE -> {
-                val uri = data?.data
-                if (uri != null) {
-                    val path = getPathFromUri(uri)
-                    pendingResult?.success(path)
-                } else {
-                    pendingResult?.error("NO_DATA", "No file selected", null)
-                }
-                pendingResult = null
-            }
-            REQUEST_TAKE_PICTURE -> {
-                if (currentPhotoPath.isNotEmpty()) {
-                    pendingResult?.success(currentPhotoPath)
-                } else {
-                    pendingResult?.error("CAPTURE_FAILED", "Failed to capture image", null)
-                }
-                pendingResult = null
-            }
+        try {
+            val pickPhoto = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+            pickPhoto.type = "image/*"
+            pickPhoto.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
+
+            startActivityForResult(pickPhoto, REQUEST_GALLERY)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Gallery error: ${e.message}", e)
+            galleryResult?.error("ERROR", e.message, null)
+            galleryResult = null
+            pendingOperation = null
         }
     }
 
-    private fun getPathFromUri(uri: Uri): String {
-        return try {
-            val inputStream = contentResolver.openInputStream(uri)
-            val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            val fileName = "FILE_${timeStamp}"
-            val file = File(cacheDir, fileName)
+    // ========== SYSTEM FILES ==========
 
-            inputStream?.use { input ->
-                file.outputStream().use { output ->
-                    input.copyTo(output)
+    private fun openSystemFiles() {
+        Log.d(TAG, "📁 Opening system files")
+
+        // Check permission
+        if (!checkStoragePermission()) {
+            Log.d(TAG, "Storage permission not granted, requesting...")
+            requestStoragePermission()
+            return
+        }
+
+        try {
+            val intent = Intent(Intent.ACTION_GET_CONTENT)
+            intent.type = "*/*"
+            intent.addCategory(Intent.CATEGORY_OPENABLE)
+
+            startActivityForResult(Intent.createChooser(intent, "Select File"), REQUEST_FILE)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ File picker error: ${e.message}", e)
+            fileResult?.error("ERROR", e.message, null)
+            fileResult = null
+            pendingOperation = null
+        }
+    }
+
+    // ========== ACTIVITY RESULT HANDLER ==========
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        Log.d(TAG, "📱 Activity result: requestCode=$requestCode, resultCode=$resultCode")
+
+        if (resultCode == Activity.RESULT_OK) {
+            when (requestCode) {
+                REQUEST_CAMERA -> {
+                    Log.d(TAG, "✅ Camera photo captured: ${cameraPhotoFile?.absolutePath}")
+                    cameraResult?.success(cameraPhotoFile?.absolutePath)
+                    cameraResult = null
+                }
+                REQUEST_GALLERY -> {
+                    val selectedImage = data?.data
+                    Log.d(TAG, "✅ Gallery selected: $selectedImage")
+                    galleryResult?.success(selectedImage?.toString())
+                    galleryResult = null
+                }
+                REQUEST_FILE -> {
+                    val selectedFile = data?.data
+                    Log.d(TAG, "✅ File selected: $selectedFile")
+                    fileResult?.success(selectedFile?.toString())
+                    fileResult = null
                 }
             }
-            file.absolutePath
+        } else {
+            Log.d(TAG, "❌ Activity cancelled")
+            when (requestCode) {
+                REQUEST_CAMERA -> {
+                    cameraResult?.success(null)
+                    cameraResult = null
+                }
+                REQUEST_GALLERY -> {
+                    galleryResult?.success(null)
+                    galleryResult = null
+                }
+                REQUEST_FILE -> {
+                    fileResult?.success(null)
+                    fileResult = null
+                }
+            }
+        }
+
+        cameraPhotoFile = null
+        pendingOperation = null
+    }
+
+    // ========== UTILITY FUNCTIONS ==========
+
+    private fun createImageFile(): File? {
+        return try {
+            val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            val imageFileName = "JPEG_${timeStamp}_"
+
+            val storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
+            storageDir?.mkdirs()
+
+            File.createTempFile(
+                imageFileName,  /* prefix */
+                ".jpg",         /* suffix */
+                storageDir      /* directory */
+            ).also {
+                Log.d(TAG, "📄 Created image file: ${it.absolutePath}")
+            }
         } catch (e: Exception) {
-            uri.path ?: ""
+            Log.e(TAG, "❌ Error creating image file: ${e.message}", e)
+            null
+        }
+    }
+
+    private fun openAppSettings() {
+        try {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+            val uri = Uri.fromParts("package", packageName, null)
+            intent.data = uri
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error opening app settings: ${e.message}", e)
         }
     }
 }

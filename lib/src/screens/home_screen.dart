@@ -23,38 +23,40 @@ class _HomeScreenState extends State<HomeScreen> {
         centerTitle: true,
       ),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (_selectedFile != null) ...[
-              FilePreview(file: _selectedFile!),
-              const SizedBox(height: 20),
-              Text(
-                'Selected: ${_selectedFile!.path.split('/').last}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 10),
-              ElevatedButton(
-                onPressed: _clearSelection,
-                child: const Text('Clear Selection'),
-              ),
-              const SizedBox(height: 30),
-            ],
-            ElevatedButton.icon(
-              onPressed: _openMediaPicker,
-              icon: const Icon(Icons.attach_file),
-              label: const Text('Choose Media'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 30,
-                  vertical: 15,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (_selectedFile != null) ...[
+                FilePreview(file: _selectedFile!),
+                const SizedBox(height: 20),
+                Text(
+                  'Selected: ${_selectedFile!.path.split('/').last}',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 10),
+                ElevatedButton(
+                  onPressed: _clearSelection,
+                  child: const Text('Clear Selection'),
+                ),
+                const SizedBox(height: 30),
+              ],
+              ElevatedButton.icon(
+                onPressed: _openMediaPicker,
+                icon: const Icon(Icons.attach_file),
+                label: const Text('Choose Media'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 30,
+                    vertical: 15,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            if (_isLoading)
-              const CircularProgressIndicator(),
-          ],
+              const SizedBox(height: 20),
+              if (_isLoading)
+                const CircularProgressIndicator(),
+            ],
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton(
