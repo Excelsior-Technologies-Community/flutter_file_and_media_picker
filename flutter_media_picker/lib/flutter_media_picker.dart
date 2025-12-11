@@ -1,5 +1,3 @@
-/// A Calculator.
-class Calculator {
-  /// Returns [value] plus 1.
-  int addOne(int value) => value + 1;
-}
+library flutter_media_picker;
+
+export 'src/widgets/media_picker.dart';   // exports your WhatsAppMediaPicker code

@@ -23,7 +23,9 @@ class WhatsAppMediaPicker extends StatefulWidget {
 }
 
 class _WhatsAppMediaPickerState extends State<WhatsAppMediaPicker> {
-  static const MethodChannel _channel = MethodChannel('media_picker_channel');
+  static const MethodChannel _channel =
+  MethodChannel('flutter_media_picker_channel');
+
   bool _isLoading = false;
   String? _currentOperation;
 
@@ -40,7 +42,6 @@ class _WhatsAppMediaPickerState extends State<WhatsAppMediaPicker> {
             BoxShadow(
               color: Colors.black.withOpacity(0.1),
               blurRadius: 20,
-              spreadRadius: 0,
             ),
           ],
         ),
@@ -68,10 +69,7 @@ class _WhatsAppMediaPickerState extends State<WhatsAppMediaPicker> {
           const SizedBox(height: 20),
           Text(
             _currentOperation ?? 'Processing...',
-            style: const TextStyle(
-              fontSize: 14,
-              color: Colors.black54,
-            ),
+            style: const TextStyle(fontSize: 14, color: Colors.black54),
           ),
         ],
       ),
@@ -91,42 +89,35 @@ class _WhatsAppMediaPickerState extends State<WhatsAppMediaPicker> {
         widget.title,
         textAlign: TextAlign.center,
         style: const TextStyle(
-          fontSize: 17,
-          fontWeight: FontWeight.w600,
-          color: Colors.black87,
-          letterSpacing: -0.4,
-        ),
+            fontSize: 17, fontWeight: FontWeight.w600, color: Colors.black87),
       ),
     );
   }
 
   Widget _buildOptionsList() {
     final List<Map<String, dynamic>> options = [];
-
     if (widget.showCamera) {
       options.add({
         'icon': Icons.camera_alt_rounded,
         'label': "Camera",
-        'color': const Color(0xFF2196F3),
+        'color': Colors.blue,
         'action': _openCamera,
       });
     }
-
     if (widget.showGallery) {
       options.add({
         'icon': Icons.photo_library_rounded,
-        'label': "Gallery Grid",
-        'color': const Color(0xFF4CAF50),
+        'label': "Gallery",
+        'color': Colors.green,
         'action': _openGallery,
       });
     }
-
     if (widget.showSystemFiles) {
       options.add({
         'icon': Icons.folder_open_rounded,
-        'label': "System Files",
-        'color': const Color(0xFFFF9800),
-        'action': _openSystemFiles,
+        'label': "Files",
+        'color': Colors.orange,
+        'action': _openFiles,
       });
     }
 
@@ -134,13 +125,9 @@ class _WhatsAppMediaPickerState extends State<WhatsAppMediaPicker> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: options.length,
-      separatorBuilder: (context, index) => Divider(
-        height: 1,
-        color: Colors.grey.shade300,
-        indent: 20,
-        endIndent: 20,
-      ),
-      itemBuilder: (context, index) => _buildOptionItem(options[index]),
+      separatorBuilder: (_, __) =>
+          Divider(height: 1, color: Colors.grey.shade300),
+      itemBuilder: (_, index) => _buildOptionItem(options[index]),
     );
   }
 
@@ -149,9 +136,6 @@ class _WhatsAppMediaPickerState extends State<WhatsAppMediaPicker> {
       color: Colors.transparent,
       child: InkWell(
         onTap: option['action'],
-        splashColor: Colors.grey.shade100,
-        highlightColor: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(8),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
           child: Row(
@@ -160,23 +144,13 @@ class _WhatsAppMediaPickerState extends State<WhatsAppMediaPicker> {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: option['color'].withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(option['icon'], size: 24, color: option['color']),
+                    color: option['color'].withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10)),
+                child: Icon(option['icon'], color: option['color']),
               ),
               const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  option['label'],
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Colors.black87,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              Icon(Icons.chevron_right_rounded, size: 24, color: Colors.grey.shade400),
+              Expanded(child: Text(option['label'])),
+              const Icon(Icons.chevron_right_rounded, color: Colors.grey),
             ],
           ),
         ),
@@ -187,99 +161,45 @@ class _WhatsAppMediaPickerState extends State<WhatsAppMediaPicker> {
   Widget _buildCancelButton() {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: Colors.grey.shade300, width: 1.0),
-        ),
-      ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: () => Navigator.pop(context),
-          borderRadius: BorderRadius.circular(8),
-          splashColor: Colors.grey.shade100,
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: const Center(
-              child: Text(
-                "Cancel",
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Color(0xFF007AFF)),
-              ),
-            ),
+                child: Text("Cancel",
+                    style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.blue))),
           ),
         ),
       ),
     );
   }
 
-  Future<void> _openCamera() async {
-    _setLoadingState(true, "Opening camera...");
-    try {
-      final result = await _channel.invokeMethod<String>('openCamera');
-      _handleResult(result);
-    } on PlatformException catch (e) {
-      _handleError("Camera", e.message);
-    } finally {
-      _setLoadingState(false);
-    }
-  }
+  Future<void> _openCamera() async => _pickFile('openCamera');
+  Future<void> _openGallery() async => _pickFile('openGallery');
+  Future<void> _openFiles() async => _pickFile('openFiles');
 
-  Future<void> _openGallery() async {
-    _setLoadingState(true, "Opening gallery...");
+  Future<void> _pickFile(String method) async {
+    _setLoadingState(true, "Opening...");
     try {
-      final result = await _channel.invokeMethod<String>('openGallery');
-      _handleResult(result);
+      final path = await _channel.invokeMethod<String>(method);
+      if (path != null) widget.onFileSelected(File(path));
     } on PlatformException catch (e) {
-      _handleError("Gallery", e.message);
-    } finally {
-      _setLoadingState(false);
-    }
-  }
-
-  Future<void> _openSystemFiles() async {
-    _setLoadingState(true, "Opening file manager...");
-    try {
-      final result = await _channel.invokeMethod<String>('openSystemFiles');
-      _handleResult(result);
-    } on PlatformException catch (e) {
-      _handleError("File picker", e.message);
-    } finally {
-      _setLoadingState(false);
-    }
-  }
-
-  void _handleResult(String? filePath) {
-    if (filePath != null && filePath.isNotEmpty) {
-      // On Android, some URIs may need to be converted to File via cache
-      final file = File(filePath);
-      widget.onFileSelected(file);
-    } else {
       widget.onFileSelected(null);
+    } finally {
+      _setLoadingState(false);
     }
   }
 
-  void _handleError(String source, String? error) {
-    widget.onFileSelected(null);
-    _showError("$source error: ${error ?? 'Unknown error'}");
-  }
-
-  void _setLoadingState(bool loading, [String? operation]) {
-    if (mounted) {
-      setState(() {
-        _isLoading = loading;
-        _currentOperation = operation;
-      });
-    }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+  void _setLoadingState(bool loading, [String? op]) {
+    if (mounted) setState(() {
+      _isLoading = loading;
+      _currentOperation = op;
+    });
   }
 }
