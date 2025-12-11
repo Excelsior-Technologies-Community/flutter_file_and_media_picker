@@ -1,4 +1,4 @@
-## flutter_media_picker
+# File Picker & Media Picker
 
 A Flutter plugin for picking media (images, files) from Camera, Gallery, or System Files with a clean, customizable UI. Inspired by WhatsApp's media picker. Works seamlessly with Android and iOS.
 
