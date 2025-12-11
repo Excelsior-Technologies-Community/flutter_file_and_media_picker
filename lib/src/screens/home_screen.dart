@@ -1,8 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_file_and_media_picker/src/widgets/file_preview_widget.dart';
 import 'package:flutter_file_and_media_picker/src/widgets/media_picker.dart';
-
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -13,100 +11,62 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   File? _selectedFile;
-  bool _isLoading = false;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('WhatsApp Media Picker'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('WhatsApp Media Picker')),
       body: Center(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (_selectedFile != null) ...[
-                FilePreview(file: _selectedFile!),
-                const SizedBox(height: 20),
-                Text(
-                  'Selected: ${_selectedFile!.path.split('/').last}',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 10),
-                ElevatedButton(
-                  onPressed: _clearSelection,
-                  child: const Text('Clear Selection'),
-                ),
-                const SizedBox(height: 30),
-              ],
-              ElevatedButton.icon(
-                onPressed: _openMediaPicker,
-                icon: const Icon(Icons.attach_file),
-                label: const Text('Choose Media'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 30,
-                    vertical: 15,
-                  ),
-                ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (_selectedFile != null) ...[
+              Image.file(
+                _selectedFile!,
+                width: 300,
+                height: 300,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Icon(Icons.file_copy_sharp, size: 80, color: Colors.red);
+                },
               ),
+              const SizedBox(height: 10),
+              Text('Selected: ${_selectedFile!.path.split('/').last}'),
               const SizedBox(height: 20),
-              if (_isLoading)
-                const CircularProgressIndicator(),
             ],
-          ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(
+                  onPressed: _openMediaPicker,
+                  child: const Text('Pick Media & File'),
+                ),
+                const SizedBox(width: 20),
+                if (_selectedFile != null)
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                    ),
+                    onPressed: () {
+                      setState(() => _selectedFile = null);
+                    },
+                    child: const Text('Clear Selection'),
+                  ),
+              ],
+            ),
+          ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openMediaPicker,
-        child: const Icon(Icons.add),
       ),
     );
   }
 
-  void _openMediaPicker() async {
-    // No permission check needed - it's handled natively
-    setState(() => _isLoading = true);
-
-    // Show the media picker
+  void _openMediaPicker() {
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.5),
-      builder: (context) => WhatsAppMediaPicker(
+      builder: (_) => WhatsAppMediaPicker(
         onFileSelected: (file) {
           Navigator.pop(context);
-          setState(() {
-            _selectedFile = file;
-            _isLoading = false;
-          });
-
-          if (file != null) {
-            _showSnackBar('File selected successfully');
-          }
+          setState(() => _selectedFile = file);
         },
-        title: 'Choose media source',
-        showCamera: true,
-        showGallery: true,
-        showSystemFiles: true,
-      ),
-    ).then((_) {
-      setState(() => _isLoading = false);
-    });
-  }
-
-  void _clearSelection() {
-    setState(() {
-      _selectedFile = null;
-    });
-  }
-
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 2),
       ),
     );
   }
